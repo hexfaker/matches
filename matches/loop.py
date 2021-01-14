@@ -1,17 +1,24 @@
+import logging
 import typing
-from typing import Any, Dict, Iterable, List, Protocol, Optional, TYPE_CHECKING, TypeVar
+from typing import Any, Dict, Iterable, List, Optional, Protocol, TYPE_CHECKING, TypeVar
 
+import ignite.distributed as idist
 import torch
 from ignite.metrics import Metric
+from ignite.utils import convert_tensor
 from torch import nn
 from torch.utils.data import DataLoader
 
+from .accelerators import Accelerator
 from .metric_manager import MetricManager
 
 if TYPE_CHECKING:
     from .callbacks.callback import Callback
 
+LOG = logging.getLogger(__name__)
+
 T_batch = TypeVar("T_batch")
+
 
 @typing.runtime_checkable
 class StateSource(Protocol):
@@ -63,13 +70,25 @@ class Loop:
         for m in self._modules:
             m.train(training)
 
-    def register(self, id: str, obj: Any):
-        if isinstance(obj, nn.Module):
-            self._modules.append(obj)
-        if isinstance(obj, StateSource) and not isinstance(obj, Metric):
-            self.state_manager.attach(id, obj)
-        if isinstance(obj, Metric):
-            self.metrics.register(id, obj)
+    def attach(
+        self,
+        id: str = None,
+        obj: Any = None,
+        objects_dict: typing.Mapping[str, Any] = None,
+        **kwargs
+    ):
+        objects_dict = objects_dict or {}
+        if id and obj is not None:
+            if isinstance(obj, nn.Module):
+                self._modules.append(obj)
+            if isinstance(obj, StateSource) and not isinstance(obj, Metric):
+                self.state_manager.attach(id, obj)
+            if isinstance(obj, Metric):
+                self.metrics.register(id, obj)
+
+        kwargs.update(objects_dict)
+        for k, v in kwargs.items():
+            self.attach(k, v)
 
     def iterate_epochs(self) -> Iterable[int]:
         for e in range(self.num_epochs):
@@ -83,18 +102,23 @@ class Loop:
                 self._emit_event("on_epoch_end")
                 self._in_epoch = False
 
-    def iterate_dataloader(self, dataloader: DataLoader[T_batch], mode="valid") -> Iterable[T_batch]:
+    def iterate_dataloader(
+        self, dataloader: DataLoader[T_batch], mode="valid", move_to_default_device=True
+    ) -> Iterable[T_batch]:
         assert self._in_epoch
 
         self._mode = mode
         self.current_dataloader = dataloader
         self._emit_event("on_dataloader_start")
+
         try:
             torch.set_grad_enabled(mode == "train")
             self._set_training(mode == "train")
             for batch in dataloader:
                 try:
                     self._emit_event("on_iteration_start")
+                    if move_to_default_device:
+                        batch = convert_tensor(batch, idist.device())
                     yield batch
                 finally:
                     self._emit_event("on_iteration_end")
@@ -108,5 +132,10 @@ class Loop:
         try:
             self._emit_event("on_train_start")
             training_procedure(self)
+        except:
+            LOG.exception("Stage raised exception")
         finally:
             self._emit_event("on_train_end")
+
+    def launch(self, program: typing.Callable, accelerator: Accelerator):
+        accelerator.execute(program, loop=self)

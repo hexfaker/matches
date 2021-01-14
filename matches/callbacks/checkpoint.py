@@ -3,6 +3,7 @@ from os import PathLike
 from pathlib import Path
 
 import torch
+from ignite.distributed import one_rank_only
 
 from .callback import Callback
 from ..loop import Loop
@@ -26,6 +27,7 @@ class BestModelSaver(Callback):
 
         self.logdir.mkdir(parents=True, exist_ok=True)
 
+    @one_rank_only()
     def on_epoch_end(self, loop: Loop):
         current_value = loop.metrics.epoch_values[self.metric_name]
 
