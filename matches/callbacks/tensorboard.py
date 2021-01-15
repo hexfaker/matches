@@ -1,6 +1,6 @@
 from typing import Optional
 
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 
 from . import Callback
 from ..loop import Loop

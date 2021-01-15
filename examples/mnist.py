@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import torch
-from ignite.metrics import Average
+from ignite.metrics.accumulation import Average
 from torch import nn
 import torch.nn.functional as F
 from torch.optim import SGD
