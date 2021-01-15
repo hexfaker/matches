@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 from torchvision.transforms import Compose, Normalize, ToTensor
 
+from matches.callbacks.tensorboard import TensorboardMetricWriterCallback
 from matches.loop import Loop
 from matches.callbacks import *
 from matches.shortcuts.optimizer import simple_gd_step
@@ -48,40 +49,43 @@ class Net(nn.Module):
 model = Net()
 optimizer = SGD(model.parameters(), lr=1e-2, momentum=0.5)
 criterion = nn.NLLLoss()
-train_loss = Average()
-valid_loss = Average()
+
+
+epoch_loss_value = Average()
 
 loop = Loop(
     3,
+    Path("logs/mnist"),
     [
-        BestModelSaver("valid_loss", Path("logs/mnist")),
+        BestModelSaver("valid/loss"),
         TqdmProgressCallback(),
+        TensorboardMetricWriterCallback(),
     ],
 )
 
 loop.attach("model", model)
 
-loop.attach("train_loss", train_loss)
-loop.attach("valid_loss", valid_loss)
-
 
 def train(loop: Loop):
     for _ in loop.iterate_epochs():
-
         for x, y in loop.iterate_dataloader(
             train_loader, mode="train", move_to_default_device=False
         ):
             y_pred = model(x)
 
             loss: torch.Tensor = criterion(y_pred, y)
-            train_loss.update(loss.detach())
+            epoch_loss_value.update(loss.detach())
             simple_gd_step(optimizer, loss)
+
+        loop.metrics.log("train/loss", epoch_loss_value)
 
         for x, y in loop.iterate_dataloader(val_loader, move_to_default_device=False):
             y_pred = model(x)
 
             loss: torch.Tensor = criterion(y_pred, y)
-            valid_loss.update(loss)
+            epoch_loss_value.update(loss)
+
+        loop.metrics.log("valid/loss", epoch_loss_value)
 
 
 loop.run(train)

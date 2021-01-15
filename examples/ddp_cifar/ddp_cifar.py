@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import ignite.utils
 
@@ -10,10 +9,11 @@ from torch.optim.lr_scheduler import OneCycleLR
 
 from matches.accelerators import DDPAccelerator
 from matches.callbacks import BestModelSaver, TqdmProgressCallback
+from matches.callbacks.tensorboard import TensorboardMetricWriterCallback
 from matches.loop import Loop
 from matches.shortcuts.optimizer import simple_gd_step
 from ignite.distributed import auto_model, auto_dataloader, get_rank
-from ignite.metrics import Precision, Recall
+from ignite.metrics import Accuracy, Precision, Recall
 from ignite.utils import to_onehot
 
 from .utils import get_model, get_train_test_datasets
@@ -52,16 +52,10 @@ def run(loop: Loop):
 
     # Ignite metrics are combinable
     f1 = (precision * recall * 2 / (precision + recall)).mean()
+    accuracy = Accuracy()
 
     # We are attaching metrics to automatically reset
     loop.attach(
-        # We are attaching metrics to automatically reset
-        # them between epochs
-        objects_dict={
-            "valid/f1": f1,
-            "valid/precission": precision,
-            "valid/recall": recall,
-        },
         # Loop manages train/eval modes, device and requires_grad of attached `nn.Module`s
         criterion=criterion,
         # This criterion doesn't have any state or attribute tensors
@@ -70,7 +64,7 @@ def run(loop: Loop):
         # Loop saves state of all attached objects having state_dict()/load_state_dict() methods
         # to checkpoints
         optimizer=optim,
-        scheduler=scheduler
+        scheduler=scheduler,
     )
 
     def train(loop: Loop):
@@ -89,14 +83,25 @@ def run(loop: Loop):
 
                 precision.update((y_pred, y))
                 recall.update((y_pred, y))
+                accuracy.update((y_pred, y))
+
+            loop.metrics.log("valid/accuracy", accuracy)
+            loop.metrics.log("valid/precision", precision.compute().mean())
+            loop.metrics.log("valid/recall", recall.compute().mean())
+            loop.metrics.log("valid/f1", f1)
 
     loop.run(train)
 
 
-loop = Loop(20, [
-    BestModelSaver("valid/f1", Path("logs/cifar"), metric_mode="max"),
-    TqdmProgressCallback(),
-])
+loop = Loop(
+    20,
+    Path("logs/cifar"),
+    [
+        BestModelSaver("valid/f1", metric_mode="max"),
+        TqdmProgressCallback(),
+        TensorboardMetricWriterCallback()
+    ],
+)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     loop.launch(run, DDPAccelerator("2"))

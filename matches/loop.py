@@ -1,5 +1,7 @@
 import logging
 import typing
+from os import PathLike
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Protocol, TYPE_CHECKING, TypeVar
 
 import ignite.distributed as idist
@@ -45,20 +47,23 @@ class StateManager:
 
 
 class Loop:
-    def __init__(self, num_epochs: int, callbacks: List["Callback"]):
+    def __init__(self, num_epochs: int, logdir: PathLike, callbacks: List["Callback"]):
         self.callbacks = callbacks
         self.num_epochs = num_epochs
         self.state_manager = StateManager()
-        self.metrics = MetricManager()
+        self.metrics = MetricManager(self)
+        self.logdir: Path = Path(logdir)
 
         self.current_dataloader: Optional[DataLoader] = None
 
         self._in_epoch = False
         self.current_dataloader = False
 
-        self._current_epoch = None
-        self._current_iteration = None
-        self._current_loader = None
+        self._current_epoch: Optional[int] = None
+        self._current_iteration: Optional[int] = None
+        self._current_batch: Optional[int] = None
+        self._current_sample: Optional[int]
+        self._current_loader: Optional[DataLoader] = None
 
         self._modules: List[nn.Module] = []
 
@@ -95,12 +100,14 @@ class Loop:
             try:
                 self.metrics.reset()
                 self._in_epoch = True
+                self._current_epoch = e
                 self._emit_event("on_epoch_start")
                 yield e
             finally:
                 self.metrics.compute()
                 self._emit_event("on_epoch_end")
                 self._in_epoch = False
+        self._current_epoch = None
 
     def iterate_dataloader(
         self, dataloader: DataLoader[T_batch], mode="valid", move_to_default_device=True
@@ -111,6 +118,9 @@ class Loop:
         self.current_dataloader = dataloader
         self._emit_event("on_dataloader_start")
 
+        self._current_iteration = 0
+        if self._current_batch is None:
+            self._current_batch = 0
         try:
             torch.set_grad_enabled(mode == "train")
             self._set_training(mode == "train")
@@ -122,6 +132,11 @@ class Loop:
                     yield batch
                 finally:
                     self._emit_event("on_iteration_end")
+                    
+                    if self._mode == "train":
+                        self._current_batch += 1
+                    
+                    self._current_iteration += 1
         finally:
             torch.set_grad_enabled(True)
             self._set_training(True)
