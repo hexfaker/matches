@@ -1,5 +1,7 @@
 import typing
 
+from torch.optim import Optimizer
+
 if typing.TYPE_CHECKING:
     from ..loop import Loop
 
@@ -27,4 +29,13 @@ class Callback:
         pass
 
     def on_train_end(self, loop: "Loop"):
+        pass
+
+    def on_after_backward(self, loop: "Loop"):
+        pass
+
+    def on_before_optimizer_step(self, loop: "Loop", optimizer: Optimizer):
+        pass
+
+    def on_after_optimizer_step(self, loop: "Loop", optimizer: Optimizer):
         pass

@@ -1,8 +1,7 @@
-from pathlib import Path
-import ignite.utils
-
-import ignite
 import torch
+from ignite.distributed import auto_dataloader, auto_model
+from ignite.metrics import Accuracy, Precision, Recall
+from ignite.utils import to_onehot
 from torch.nn import CrossEntropyLoss
 from torch.optim import SGD
 from torch.optim.lr_scheduler import OneCycleLR
@@ -11,16 +10,15 @@ from matches.accelerators import DDPAccelerator
 from matches.callbacks import BestModelSaver, TqdmProgressCallback
 from matches.callbacks.tensorboard import TensorboardMetricWriterCallback
 from matches.loop import Loop
-from matches.shortcuts.optimizer import simple_gd_step
-from ignite.distributed import auto_model, auto_dataloader, get_rank
-from ignite.metrics import Accuracy, Precision, Recall
-from ignite.utils import to_onehot
-
+from matches.utils import seed_everything, unique_logdir
 from .utils import get_model, get_train_test_datasets
 
 
 def run(loop: Loop):
-    ignite.utils.manual_seed(42)
+    seed_everything(42)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
     train_ds, valid_ds = get_train_test_datasets("data/cifar")
 
     model = auto_model(get_model())
@@ -73,8 +71,10 @@ def run(loop: Loop):
                 y_pred_logits = model(x)
 
                 loss: torch.Tensor = criterion(y_pred_logits, y)
-                simple_gd_step(optim, loss)
+                loop.backward(loss)
+                loop.optimizer_step(optim)
                 scheduler.step()
+                loop.metrics.log("lr", scheduler.get_last_lr()[0])
 
             for x, y in loop.iterate_dataloader(valid_loader):
                 y_pred_logits: torch.Tensor = model(x)
@@ -85,17 +85,17 @@ def run(loop: Loop):
                 recall.update((y_pred, y))
                 accuracy.update((y_pred, y))
 
-            loop.metrics.log("valid/accuracy", accuracy)
             loop.metrics.log("valid/precision", precision.compute().mean())
             loop.metrics.log("valid/recall", recall.compute().mean())
-            loop.metrics.log("valid/f1", f1)
+            loop.metrics.consume("valid/f1", f1)
+            loop.metrics.consume("valid/accuracy", accuracy)
 
     loop.run(train)
 
 
 loop = Loop(
     20,
-    Path("logs/cifar"),
+    unique_logdir("logs/cifar"),
     [
         BestModelSaver("valid/f1", metric_mode="max"),
         TqdmProgressCallback(),

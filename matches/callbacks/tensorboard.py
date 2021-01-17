@@ -1,5 +1,6 @@
 from typing import Optional
 
+from ignite.distributed import one_rank_only
 from tensorboardX import SummaryWriter
 
 from . import Callback
@@ -12,12 +13,20 @@ class TensorboardMetricWriterCallback(Callback):
 
         self.sw: Optional[SummaryWriter] = None
 
+    @one_rank_only()
     def on_iteration_end(self, loop: "Loop"):
         self._consume_new_entries(loop)
 
+    @one_rank_only()
     def on_epoch_end(self, loop: "Loop"):
         self._consume_new_entries(loop)
         self.sw.flush()
+
+    @one_rank_only()
+    def on_train_end(self, loop: "Loop"):
+        if self.sw:
+            self.sw.close()
+            self.sw = None
 
     def _init_sw(self, loop: Loop):
         if self.sw is None:
