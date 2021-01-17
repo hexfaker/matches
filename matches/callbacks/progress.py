@@ -11,12 +11,14 @@ from ..loop import Loop
 
 class TqdmProgressCallback(Callback):
     def __init__(self):
-        pass
+        self._stream = None
+        self.epoch_progress = None
+        self.loader_progress = None
 
     @one_rank_only()
     def on_train_start(self, loop: Loop):
         # Save real strerr stream because it will be overridden in configure_logging()
-        self._stream = sys.stdout
+        self._stream = sys.stderr
         self.epoch_progress: Optional[tqdm.tqdm] = tqdm.tqdm(
             desc="Epochs", file=self._stream
         )
@@ -27,8 +29,7 @@ class TqdmProgressCallback(Callback):
         # Configure log sink, stdout and stderr to write with tqdm.write()
         # to keep things nice
         configure_logging(sys.stdout)
-        
-        self.epoch_progress.disable = False
+
         self.epoch_progress.reset(total=loop.num_epochs)
 
     @one_rank_only()

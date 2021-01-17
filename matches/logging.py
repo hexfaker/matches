@@ -1,47 +1,41 @@
 import logging
 import sys
-from functools import partial
+from contextlib import contextmanager
 
 import coloredlogs
-import tqdm
+from tqdm.auto import tqdm
 
 
-class TqdmLoggingHandler(logging.Handler):
-    def __init__(self, file, level=logging.NOTSET):
-        super().__init__(level)
-        self.file = file
+class StreamThroughTqdm:
+    def __init__(self, real_stream, stdout=sys.stdout, stderr=sys.stderr):
+        self._stdout = stdout
+        self._stderr = stderr
+        self._real_stream = real_stream
 
-    def emit(self, record):
+    @contextmanager
+    def _std_streams(self):
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
         try:
-            msg = self.format(record)
-            tqdm.tqdm.write(msg, file=self.file)
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
-            self.handleError(record)
-
-
-class StreamToLogger:
-    """
-         Fake file-like stream object that redirects writes to a logger instance.
-         """
-
-    def __init__(self, logger_name, log_level=logging.INFO):
-        self.logger = logging.getLogger(logger_name)
-        self.log_level = log_level
-        self.linebuf = ''
+            sys.stderr = self._stderr
+            sys.stdout = self._stdout
+            yield
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
 
     def write(self, buf):
-        for line in buf.rstrip().splitlines():
-            self.logger.log(self.log_level, line.rstrip())
+        with self._std_streams():
+            for line in buf.rstrip().splitlines():
+                tqdm.write(line.rstrip(), self._real_stream)
 
     def flush(self):
         pass
 
 
 def configure_logging(file=sys.stdout):
-    coloredlogs.StandardErrorHandler = partial(TqdmLoggingHandler, file=file)
-    coloredlogs.install()
+    tqdm_stream = StreamThroughTqdm(file)
+    coloredlogs.install(isatty=True, stream=tqdm_stream)
     logging.captureWarnings(True)
-    sys.stdout = StreamToLogger("STDOUT")
-    sys.stderr = StreamToLogger("STDERR")
+    sys.stdout = tqdm_stream
+    sys.stderr = tqdm_stream
