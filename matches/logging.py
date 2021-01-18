@@ -25,6 +25,9 @@ class StreamThroughTqdm:
             sys.stderr = old_stderr
 
     def write(self, buf):
+        # Set default streams back
+        # They are required for correct tqdm.write work
+        # See tqdm.tqdm.external_write_mode()
         with self._std_streams():
             for line in buf.rstrip().splitlines():
                 tqdm.write(line.rstrip(), self._real_stream)

@@ -70,13 +70,11 @@ class Loop:
         self.current_dataloader: Optional[DataLoader] = None
 
         self._in_epoch = False
-        self.current_dataloader = False
 
         self._current_epoch: Optional[int] = None
         self._current_iteration: Optional[int] = None
         self._current_batch: Optional[int] = None
         self._current_sample: Optional[int]
-        self._current_loader: Optional[DataLoader] = None
 
         self._modules: List[nn.Module] = []
 
@@ -191,11 +189,11 @@ class Loop:
                     if move_to_default_device:
                         batch = convert_tensor(batch, idist.device())
                     yield batch
-                finally:
-                    self._emit_event("on_iteration_end")
 
                     if self._mode == "train":
                         self._current_batch += 1
+                finally:
+                    self._emit_event("on_iteration_end")
 
                     self._current_iteration += 1
         finally:

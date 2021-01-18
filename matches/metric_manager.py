@@ -56,7 +56,7 @@ class MetricManager:
 
 
     def _guess_iteration_type(self):
-        if self._loop._current_loader is not None:
+        if self._loop.current_dataloader is not None:
             return MetricIterationType.BATCHES
         return MetricIterationType.EPOCHS
 

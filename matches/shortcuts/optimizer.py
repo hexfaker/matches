@@ -2,6 +2,7 @@ import typing
 from typing import Protocol
 
 import torch
+from matches.loop import Loop
 from torch.optim.optimizer import Optimizer
 
 
@@ -20,7 +21,6 @@ class LRSchedulerProto(Protocol):
         pass
 
 
-def simple_gd_step(optimizer: Optimizer, loss: torch.Tensor, **backward_kwargs):
-    optimizer.zero_grad()
-    loss.backward(**backward_kwargs)
-    optimizer.step()
+def simple_gd_step(loop: Loop, optimizer: Optimizer, loss: torch.Tensor):
+    loop.backward(loss)
+    loop.optimizer_step(optimizer)
