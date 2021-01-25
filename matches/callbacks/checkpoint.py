@@ -1,8 +1,5 @@
 import logging
-from os import PathLike
-from pathlib import Path
 
-import torch
 from ignite.distributed import one_rank_only
 
 from .callback import Callback
@@ -40,11 +37,12 @@ class BestModelSaver(Callback):
             self.save_model(loop)
 
     def save_model(self, loop: Loop):
-
-        state = loop.state_manager.state_dict()
-
         checkpoint_path = loop.logdir / self.logdir_suffix / "best.pth"
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with checkpoint_path.open("wb") as f:
-            torch.save(state, f)
+        loop.state_manager.write_state(checkpoint_path)
+
+    def load_best_model(self, loop: Loop):
+        checkpoint_path = loop.logdir / self.logdir_suffix / "best.pth"
+
+        loop.state_manager.read_state(checkpoint_path)

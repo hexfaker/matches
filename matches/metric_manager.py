@@ -54,7 +54,6 @@ class MetricManager:
             self._new_entries = []
         return result
 
-
     def _guess_iteration_type(self):
         if self._loop.current_dataloader is not None:
             return MetricIterationType.BATCHES

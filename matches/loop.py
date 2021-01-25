@@ -1,5 +1,6 @@
 import logging
 import typing
+from contextlib import contextmanager
 from os import PathLike
 from pathlib import Path
 from typing import (
@@ -12,6 +13,7 @@ from typing import (
     Protocol,
     TYPE_CHECKING,
     TypeVar,
+    Union,
 )
 
 import ignite.distributed as idist
@@ -56,9 +58,24 @@ class StateManager:
         for k, ss in self._state_sources.items():
             ss.load_state_dict(state_dict[k])
 
+    def write_state(self, file: Union[str, PathLike]):
+        with Path(file).open("wb") as f:
+            torch.save(self.state_dict(), f)
+
+    def read_state(self, file: Union[str, PathLike]):
+        with Path(file).open("rb") as f:
+            self.load_state_dict(torch.load(f))
+
 
 class Loop:
-    def __init__(self, num_epochs: int, logdir: PathLike, callbacks: List["Callback"]):
+    def __init__(
+        self,
+        num_epochs: int,
+        logdir: PathLike,
+        callbacks: List["Callback"],
+        dev: bool = False,
+    ):
+        self.dev = dev
         self.callbacks = callbacks
         self.num_epochs = num_epochs
         self.state_manager = StateManager()
@@ -70,7 +87,7 @@ class Loop:
         self.current_dataloader: Optional[DataLoader] = None
 
         self._in_epoch = False
-
+        self._mode: Optional[str] = None
         self._current_epoch: Optional[int] = None
         self._current_iteration: Optional[int] = None
         self._current_batch: Optional[int] = None
@@ -134,15 +151,12 @@ class Loop:
               current epoch number
         """
         for e in range(self.num_epochs):
-            try:
-                self.metrics.reset()
-                self._in_epoch = True
-                self._current_epoch = e
-                self._emit_event("on_epoch_start")
+            self.metrics.reset()
+            self._in_epoch = True
+            self._current_epoch = e
+            with self._wrap_in_events("on_epoch_start", "on_epoch_end"):
                 yield e
-            finally:
-                self._emit_event("on_epoch_end")
-                self._in_epoch = False
+            self._in_epoch = False
         self._current_epoch = None
 
     def iterate_dataloader(
@@ -151,11 +165,11 @@ class Loop:
         """Iterate dataloader batches.
 
         Depending on chosen mode following is true inside loop over this generator:
-        
+
         * Emits callback events `on_iteration_start/end`
         * Moves all torch.Tensor objects in batch to default device
         * Handles set_grad_enabled an train/eval of attached :obj:`nn.Module`:
-        
+
             * mode="train" trigger train() on all `torch.nn.Modules` attached to
               `Loop`. Gradients are also enabled.
             * mode="valid" trigger eval() on all `torch.nn.Modules` attached to
@@ -171,36 +185,38 @@ class Loop:
         Yields:
             Batches from dataloader.
         """
-        assert self._in_epoch
-
         self._mode = mode
         self.current_dataloader = dataloader
-        self._emit_event("on_dataloader_start")
 
-        self._current_iteration = 0
-        if self._current_batch is None:
-            self._current_batch = 0
-        try:
-            torch.set_grad_enabled(mode == "train")
-            self._set_training(mode == "train")
+        with self._wrap_in_events(
+            "on_dataloader_start", "on_dataloader_end"
+        ), self.mode(mode):
+            self._current_iteration = 0
+            if self._current_batch is None:
+                self._current_batch = 0
+
             for batch in dataloader:
-                try:
-                    self._emit_event("on_iteration_start")
+                with self._wrap_in_events("on_iteration_start", "on_iteration_end"):
                     if move_to_default_device:
                         batch = convert_tensor(batch, idist.device())
                     yield batch
-
                     if self._mode == "train":
                         self._current_batch += 1
-                finally:
-                    self._emit_event("on_iteration_end")
 
-                    self._current_iteration += 1
-        finally:
-            torch.set_grad_enabled(True)
-            self._set_training(True)
-            self._emit_event("on_dataloader_end")
-            self.current_dataloader = None
+        self.current_dataloader = None
+
+    @contextmanager
+    def _wrap_in_events(self, enter_event_name, exit_event_name):
+        """CM for emits enter_event_name before block, and emits exit_event_name
+        after successful generator termination
+        (even if it was stopped with continue statement)
+        """
+        try:
+            self._emit_event(enter_event_name)
+            yield
+        except GeneratorExit:
+            pass
+        self._emit_event(exit_event_name)
 
     def backward(self, loss: torch.Tensor, **backward_kwargs):
         """Simple optional wrapper for backward call.
@@ -217,6 +233,30 @@ class Loop:
         """
         loss.backward(**backward_kwargs)
         self._emit_event("on_after_backward")
+
+    @contextmanager
+    def mode(self, mode="valid"):
+        """
+        Contextmanager managing gradients and train/eval mode of attached modules
+
+        Args:
+            mode: train/valid
+        """
+        assert (
+            mode != "train" or self._in_epoch
+        ), "Dataloader can be run in train mode only inside epoch loop"
+        old_mode = self._mode
+        try:
+            self._mode = mode
+
+            with torch.set_grad_enabled(mode == "train"):
+                self._set_training(mode == "train")
+                yield
+        except GeneratorExit:
+            pass
+
+        self._mode = old_mode
+        self._set_training(old_mode == "train")
 
     def optimizer_step(
         self,
@@ -246,14 +286,10 @@ class Loop:
             optimizer.zero_grad()
         self._emit_event("on_before_optimizer_step", optimizer=optimizer)
 
-    def run(self, training_procedure: typing.Callable):
-        try:
-            self._emit_event("on_train_start")
-            training_procedure(self)
-        except:
-            LOG.exception("Stage raised exception")
-        finally:
-            self._emit_event("on_train_end")
+    def run(self, training_procedure: typing.Callable, *args, **kwargs):
+        self._emit_event("on_train_start")
+        training_procedure(self, *args, **kwargs)
+        self._emit_event("on_train_end")
 
     def launch(self, program: typing.Callable, accelerator: Accelerator):
         """Launch training program on chosen accelerator
