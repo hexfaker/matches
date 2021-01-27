@@ -297,7 +297,7 @@ class Loop:
         training_procedure(self, *args, **kwargs)
         self._emit_event("on_train_end")
 
-    def launch(self, program: typing.Callable, accelerator: Accelerator):
+    def launch(self, program: typing.Callable, accelerator: Accelerator, **kwargs):
         """Launch training program on chosen accelerator
 
         Examples::
@@ -310,7 +310,7 @@ class Loop:
         Args:
               program: Training program
               accelerator: object defining accelerator environment
-
+              **kwargs: additional program kwargs
 
         """
-        accelerator.execute(program, loop=self)
+        accelerator.execute(program, loop=self, **kwargs)
