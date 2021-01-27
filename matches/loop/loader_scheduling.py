@@ -67,7 +67,7 @@ class DataloaderSchedulerWrapper(Generic[T_co]):
                 try:
                     batch = next(self._internal_iterator)
                 except StopIteration:
-                    del self._internal_iterator
+                    self._internal_iterator = None
 
             yield batch
 
