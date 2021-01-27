@@ -1,6 +1,8 @@
 import logging
 from pathlib import Path
 
+from ignite.distributed import one_rank_only
+
 try:
     from git import Repo
 except ImportError:
@@ -56,6 +58,8 @@ def _write_git_ref(logdir, ref):
 
 
 class EnsureWorkdirCleanOrDevMode(Callback):
+
+    @one_rank_only()
     def on_train_start(self, loop: "Loop"):
         if Repo is None:
             raise Exception("GitPython not found. Run pip install GitPython")

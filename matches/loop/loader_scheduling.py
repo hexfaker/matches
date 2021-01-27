@@ -77,3 +77,11 @@ class DataloaderSchedulerWrapper(Generic[T_co]):
     @property
     def internal_loader_passes(self) -> float:
         return self._internal_loader_full_passes + self._internal_iteration / len(self.dataloader)
+
+    @property
+    def dataset(self):
+        return self.dataloader.dataset
+
+    @property
+    def sampler(self):
+        return self.dataloader.sampler
