@@ -24,11 +24,13 @@ from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
-from .accelerators import Accelerator
-from .metric_manager import MetricManager
+from matches.accelerators import Accelerator
+from matches.loop.iteration import IterationCounter
+from matches.loop.loader_scheduling import DataloaderSchedulerWrapper
+from matches.loop.metric_manager import MetricManager
 
 if TYPE_CHECKING:
-    from .callbacks.callback import Callback
+    from matches.callbacks.callback import Callback
 
 LOG = logging.getLogger(__name__)
 
@@ -70,28 +72,23 @@ class StateManager:
 class Loop:
     def __init__(
         self,
-        num_epochs: int,
         logdir: PathLike,
         callbacks: List["Callback"],
         dev: bool = False,
     ):
         self.dev = dev
         self.callbacks = callbacks
-        self.num_epochs = num_epochs
         self.state_manager = StateManager()
         self.metrics = MetricManager(self)
         """Object for metrics logging"""
 
         self.logdir: Path = Path(logdir)
 
-        self.current_dataloader: Optional[DataLoader] = None
+        self.iterations = IterationCounter()
 
         self._in_epoch = False
+        self._in_dataloader = False
         self._mode: Optional[str] = None
-        self._current_epoch: Optional[int] = None
-        self._current_iteration: Optional[int] = None
-        self._current_batch: Optional[int] = None
-        self._current_sample: Optional[int]
 
         self._modules: List[nn.Module] = []
 
@@ -142,7 +139,7 @@ class Loop:
         for k, v in kwargs.items():
             self.attach(k, v)
 
-    def iterate_epochs(self) -> Iterable[int]:
+    def iterate_epochs(self, epochs) -> Iterable[int]:
         """Iterate over epochs
 
         * Emits callback events `on_epoch_start/end`
@@ -150,14 +147,21 @@ class Loop:
         Yields:
               current epoch number
         """
-        for e in range(self.num_epochs):
+        if self.dev:
+            epochs = 2
+            
+        while self.iterations.current_epoch < epochs:
             self.metrics.reset()
             self._in_epoch = True
-            self._current_epoch = e
-            with self._wrap_in_events("on_epoch_start", "on_epoch_end"):
-                yield e
+            with self._wrap_in_events(
+                "on_epoch_start",
+                "on_epoch_end",
+                epoch_no=self.iterations.current_epoch,
+                total_epochs=epochs,
+            ):
+                yield self.iterations.current_epoch
+            self.iterations.current_epoch.inc()
             self._in_epoch = False
-        self._current_epoch = None
 
     def iterate_dataloader(
         self, dataloader: DataLoader[T_batch], mode="valid", move_to_default_device=True
@@ -186,37 +190,38 @@ class Loop:
             Batches from dataloader.
         """
         self._mode = mode
-        self.current_dataloader = dataloader
+
+        if self.dev:
+            dataloader = DataloaderSchedulerWrapper(dataloader, truncated_length=3)
+
 
         with self._wrap_in_events(
-            "on_dataloader_start", "on_dataloader_end"
+            "on_dataloader_start", "on_dataloader_end", dataloader=dataloader
         ), self.mode(mode):
-            self._current_iteration = 0
-            if self._current_batch is None:
-                self._current_batch = 0
-
-            for batch in dataloader:
-                with self._wrap_in_events("on_iteration_start", "on_iteration_end"):
+            self._in_dataloader = True
+            for batch_no, batch in enumerate(dataloader):
+                with self._wrap_in_events(
+                    "on_iteration_start", "on_iteration_end", batch_no=batch_no
+                ):
                     if move_to_default_device:
                         batch = convert_tensor(batch, idist.device())
                     yield batch
                     if self._mode == "train":
-                        self._current_batch += 1
-
-        self.current_dataloader = None
+                        self.iterations.current_batch.inc()
+            self._in_dataloader = False
 
     @contextmanager
-    def _wrap_in_events(self, enter_event_name, exit_event_name):
+    def _wrap_in_events(self, enter_event_name, exit_event_name, **kwargs):
         """CM for emits enter_event_name before block, and emits exit_event_name
         after successful generator termination
         (even if it was stopped with continue statement)
         """
         try:
-            self._emit_event(enter_event_name)
+            self._emit_event(enter_event_name, **kwargs)
             yield
         except GeneratorExit:
             pass
-        self._emit_event(exit_event_name)
+        self._emit_event(exit_event_name, **kwargs)
 
     def backward(self, loss: torch.Tensor, **backward_kwargs):
         """Simple optional wrapper for backward call.
@@ -268,7 +273,7 @@ class Loop:
 
         * Zeroes grad after step (quite common case, you know ;-))
         * Emits some callback events (before/after step)
-        * Counts how much steps are done (differs from iterations/batches
+        * Counts how much global_steps are done (differs from iterations/batches
           if you implement eg grad accumulation). This counter can be used as
           MetricsIterationType
 
@@ -285,6 +290,7 @@ class Loop:
         if zero_grad:
             optimizer.zero_grad()
         self._emit_event("on_before_optimizer_step", optimizer=optimizer)
+        self.iterations.global_steps.inc()
 
     def run(self, training_procedure: typing.Callable, *args, **kwargs):
         self._emit_event("on_train_start")

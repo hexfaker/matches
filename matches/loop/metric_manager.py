@@ -1,5 +1,4 @@
 import logging
-from enum import Enum
 from typing import Dict, List, TYPE_CHECKING, Union
 
 import numpy as np
@@ -8,26 +7,20 @@ import torch
 from dataclasses import dataclass
 from ignite.metrics import Metric
 
+from .iteration import IterationType
+
 if TYPE_CHECKING:
     from matches.loop import Loop
 
 LOG = logging.getLogger(__name__)
 
 
-class MetricIterationType(Enum):
-    AUTO = "auto"
-    EPOCHS = "epochs"
-    BATCHES = "batches"
-    SAMPLES = "samples"
-    CUSTOM = "custom"
-
-
 @dataclass
 class MetricEntry:
     name: str
     value: float
-    iteration_type: MetricIterationType
-    iteration_values: Dict[MetricIterationType, int]
+    iteration_type: IterationType
+    iteration_values: Dict[IterationType, int]
 
     @property
     def iteration(self):
@@ -55,15 +48,15 @@ class MetricManager:
         return result
 
     def _guess_iteration_type(self):
-        if self._loop.current_dataloader is not None:
-            return MetricIterationType.BATCHES
-        return MetricIterationType.EPOCHS
+        if self._loop._in_dataloader:
+            return IterationType.BATCHES
+        return IterationType.EPOCHS
 
     def log(
         self,
         name: str,
         value: Union[float, torch.Tensor, np.ndarray],
-        iteration: Union[str, MetricIterationType, int] = MetricIterationType.AUTO,
+        iteration: Union[str, IterationType, int] = IterationType.AUTO,
     ):
         r"""Logs metric value at specified iteration
 
@@ -99,23 +92,23 @@ class MetricManager:
               None
         """
         if isinstance(iteration, int):
-            iteration_type = MetricIterationType.CUSTOM
+            iteration_type = IterationType.CUSTOM
         else:
-            iteration_type = MetricIterationType(iteration)
+            iteration_type = IterationType(iteration)
 
-        if iteration_type == MetricIterationType.AUTO:
+        if iteration_type == IterationType.AUTO:
             iteration_type = self._guess_iteration_type()
 
         if torch.is_tensor(value) or isinstance(value, np.ndarray):
             value = value.item()
 
         iteration_values = {
-            MetricIterationType.EPOCHS: self._loop._current_epoch,
-            MetricIterationType.BATCHES: self._loop._current_batch,
+            IterationType.EPOCHS: self._loop.iterations.current_epoch,
+            IterationType.BATCHES: self._loop.iterations.current_batch,
         }
 
-        if iteration_type == MetricIterationType.CUSTOM:
-            iteration_values[MetricIterationType.CUSTOM] = iteration
+        if iteration_type == IterationType.CUSTOM:
+            iteration_values[IterationType.CUSTOM] = iteration
 
         entry = MetricEntry(name, value, iteration_type, iteration_values)
         self._new_entries.append(entry)
@@ -129,7 +122,7 @@ class MetricManager:
         self,
         name: str,
         metric: Metric,
-        iteration: Union[str, MetricIterationType, int] = MetricIterationType.AUTO,
+        iteration: Union[str, IterationType, int] = IterationType.AUTO,
     ):
         r"""Shortcut for logging and resetting metric in one call
 

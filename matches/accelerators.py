@@ -1,8 +1,7 @@
-from abc import ABC, abstractmethod
-from collections import Callable
-from typing import List, Union
-
 import os
+from abc import ABC, abstractmethod
+from typing import Callable, List, Union
+
 import torch
 from ignite.distributed import Parallel
 

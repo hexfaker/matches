@@ -10,15 +10,15 @@ from matches.accelerators import DDPAccelerator
 from matches.callbacks import BestModelSaver, TqdmProgressCallback
 from matches.callbacks.tensorboard import TensorboardMetricWriterCallback
 from matches.loop import Loop
-from matches.utils import seed_everything, unique_logdir
+from matches.utils import seed_everything, setup_cudnn_reproducibility, unique_logdir
 from .utils import get_model, get_train_test_datasets
 
+NUM_EPOCHS = 20
 
 def run(loop: Loop):
     seed_everything(42)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    
+    setup_cudnn_reproducibility(True, False)
+
     train_ds, valid_ds = get_train_test_datasets("data/cifar")
 
     model = auto_model(get_model())
@@ -41,7 +41,7 @@ def run(loop: Loop):
     optim = SGD(model.parameters(), lr=0.4, momentum=0.9)
 
     scheduler = OneCycleLR(
-        optim, max_lr=1, epochs=loop.num_epochs, steps_per_epoch=len(train_loader)
+        optim, max_lr=1, epochs=NUM_EPOCHS, steps_per_epoch=len(train_loader)
     )
     criterion = CrossEntropyLoss()
 
@@ -66,7 +66,7 @@ def run(loop: Loop):
     )
 
     def train(loop: Loop):
-        for _ in loop.iterate_epochs():
+        for _ in loop.iterate_epochs(NUM_EPOCHS):
             for x, y in loop.iterate_dataloader(train_loader, mode="train"):
                 y_pred_logits = model(x)
 
@@ -94,7 +94,6 @@ def run(loop: Loop):
 
 
 loop = Loop(
-    20,
     unique_logdir("logs/cifar"),
     [
         BestModelSaver("valid/f1", metric_mode="max"),

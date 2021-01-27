@@ -1,20 +1,19 @@
 import pytest
 
-
-from matches.metric_manager import MetricIterationType
+from matches.loop import IterationType
 
 
 def test_enum_convertation():
-    assert MetricIterationType("auto") == MetricIterationType.AUTO
-    assert MetricIterationType("epochs") == MetricIterationType.EPOCHS
-    assert MetricIterationType("samples") == MetricIterationType.SAMPLES
-    assert MetricIterationType("batches") == MetricIterationType.BATCHES
+    assert IterationType("auto") == IterationType.AUTO
+    assert IterationType("epochs") == IterationType.EPOCHS
+    assert IterationType("samples") == IterationType.SAMPLES
+    assert IterationType("batches") == IterationType.BATCHES
 
     with pytest.raises(ValueError):
-        MetricIterationType("no-such-type")
+        IterationType("no-such-type")
 
     with pytest.raises(ValueError):
-        MetricIterationType(1)
+        IterationType(1)
 
     with pytest.raises(ValueError):
-        MetricIterationType(10.)
+        IterationType(10.)

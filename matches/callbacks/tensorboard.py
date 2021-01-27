@@ -14,11 +14,11 @@ class TensorboardMetricWriterCallback(Callback):
         self.sw: Optional[SummaryWriter] = None
 
     @one_rank_only()
-    def on_iteration_end(self, loop: "Loop"):
+    def on_iteration_end(self, loop: "Loop", batch_no: int):
         self._consume_new_entries(loop)
 
     @one_rank_only()
-    def on_epoch_end(self, loop: "Loop"):
+    def on_epoch_end(self, loop: "Loop", epoch_no: int, total_epochs: int):
         self._consume_new_entries(loop)
         self.sw.flush()
 

@@ -22,7 +22,7 @@ class BestModelSaver(Callback):
             self._sel = max
 
     @one_rank_only()
-    def on_epoch_end(self, loop: Loop):
+    def on_epoch_end(self, loop: "Loop", epoch_no: int, total_epochs: int):
         current_value = loop.metrics.latest[self.metric_name].value
 
         better_value = self._sel(current_value, self.best_value)
