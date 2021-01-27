@@ -1,6 +1,7 @@
 import logging
 import typing
 from contextlib import contextmanager
+from functools import lru_cache
 from os import PathLike
 from pathlib import Path
 from typing import (
@@ -44,6 +45,11 @@ class StateSource(Protocol):
 
     def load_state_dict(self, state_dict):
         pass
+
+
+@lru_cache
+def _wrap_for_dev(dataloader):
+    return DataloaderSchedulerWrapper(dataloader, single_pass_length=3)
 
 
 class StateManager:
@@ -149,7 +155,7 @@ class Loop:
         """
         if self.dev:
             epochs = 2
-            
+
         while self.iterations.current_epoch < epochs:
             self.metrics.reset()
             self._in_epoch = True
@@ -192,8 +198,7 @@ class Loop:
         self._mode = mode
 
         if self.dev:
-            dataloader = DataloaderSchedulerWrapper(dataloader, truncated_length=3)
-
+            dataloader = _wrap_for_dev(dataloader)
 
         with self._wrap_in_events(
             "on_dataloader_start", "on_dataloader_end", dataloader=dataloader
