@@ -20,11 +20,18 @@ class DDPAccelerator(Accelerator):
             devices = list(map(int, devices.split(",")))
         self.devices = devices
 
+    def _master_port(self):
+        return str(hash(tuple(sorted(self.devices))) % 1024 + 1024)
+
     @staticmethod
     def _worker_fn(local_rank, func, *args, **kwargs):
         func(*args, **kwargs)
 
     def execute(self, func: Callable, *args, **kwargs):
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, self.devices))
-        with Parallel(backend="nccl", nproc_per_node=len(self.devices)) as p:
+        with Parallel(
+            backend="nccl",
+            nproc_per_node=len(self.devices),
+            master_port=self._master_port(),
+        ) as p:
             p.run(self._worker_fn, func, *args, **kwargs)
