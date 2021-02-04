@@ -49,6 +49,10 @@ class StateSource(Protocol):
 
 @lru_cache
 def _wrap_for_dev(dataloader):
+    # Every extra worker slows down start
+    # So we want minimal test of dataloader mutliprocessing,
+    # But we want it fast
+    dataloader.num_workers = 1
     return DataloaderSchedulerWrapper(dataloader, single_pass_length=3)
 
 
@@ -318,4 +322,5 @@ class Loop:
               **kwargs: additional program kwargs
 
         """
+        self.logdir.mkdir(exist_ok=True, parents=True)
         accelerator.execute(program, loop=self, **kwargs)
