@@ -1,6 +1,10 @@
+import logging
+logging.basicConfig()
+
 import pytest
 
 from matches.loop import IterationType
+from matches.loop.metric_manager import _log_non_finit
 
 
 def test_enum_convertation():
@@ -17,3 +21,8 @@ def test_enum_convertation():
 
     with pytest.raises(ValueError):
         IterationType(10.)
+
+
+def test_log_non_finit(caplog):
+    _log_non_finit("foo", float("nan"))
+    assert "foo" in caplog.records[-1].getMessage()

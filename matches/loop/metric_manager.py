@@ -1,4 +1,6 @@
 import logging
+import math
+from numbers import Number
 from typing import Dict, List, TYPE_CHECKING, Union
 
 import numpy as np
@@ -25,6 +27,12 @@ class MetricEntry:
     @property
     def iteration(self):
         return self.iteration_values[self.iteration_type]
+
+
+def _log_non_finit(name: str, value: float):
+    if math.isfinite(value):
+        return
+    LOG.warning("Metric %s has non-finite value %f", name, value)
 
 
 class MetricManager:
@@ -101,6 +109,8 @@ class MetricManager:
 
         if torch.is_tensor(value) or isinstance(value, np.ndarray):
             value = value.item()
+
+        _log_non_finit(name, value)
 
         iteration_values = {
             IterationType.EPOCHS: self._loop.iterations.current_epoch,
