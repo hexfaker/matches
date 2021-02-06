@@ -41,6 +41,8 @@ pip install git+https://github.com/hexfaker/matches
 ```
 
 ## Examples
-Examples are located in `examples/` dir. The most featured and sophisticated in 
-[DCGAN example](https://github.com/hexfaker/matches/tree/master/examples/dcgan).
-Others are simpler and less featured but can be still interesting.
+Examples are located in `examples/` dir. 
+* [DCGAN example](https://github.com/hexfaker/matches/tree/master/examples/dcgan)
+  has complex batch handling, image saving to tensorboard and configs
+* [CIFAR example](https://github.com/hexfaker/matches/blob/master/examples/ddp_cifar/ddp_cifar.py) is 
+well-commented and has OneCycle scheduler.
