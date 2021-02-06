@@ -15,6 +15,7 @@ from .utils import get_model, get_train_test_datasets
 
 NUM_EPOCHS = 20
 
+
 def run(loop: Loop):
     seed_everything(42)
     setup_cudnn_reproducibility(True, False)
@@ -72,11 +73,25 @@ def run(loop: Loop):
 
                 loss: torch.Tensor = criterion(y_pred_logits, y)
                 loop.backward(loss)
-                loop.optimizer_step(optim)
-                scheduler.step()
-                loop.metrics.log("lr", scheduler.get_last_lr()[0])
+                # Makes optimizer step and also
+                # zeroes grad after (default)
+                loop.optimizer_step(optim, zero_grad=True)
 
-            for x, y in loop.iterate_dataloader(valid_loader):
+                # Here we call scheduler.step() every iteration
+                # because we have one-cycle scheduler
+                # we also can call it after all dataloader loop
+                # if it's som usual scheduler
+                scheduler.step()
+
+                # Log learning rate. All metrics are written to tensorboard
+                # with specified names
+                # If iteration='auto' (default) its determined based on where the call is
+                # performed. Here it will be batches
+                loop.metrics.log("lr", scheduler.get_last_lr()[0], iteration="auto")
+
+            # Loop disables gradients and calls Module.eval() inside loop
+            # for all attached modules when mode="valid" (default)
+            for x, y in loop.iterate_dataloader(valid_loader, mode="valid"):
                 y_pred_logits: torch.Tensor = model(x)
 
                 y_pred = to_onehot(y_pred_logits.argmax(dim=-1), num_classes=10)
@@ -85,8 +100,14 @@ def run(loop: Loop):
                 recall.update((y_pred, y))
                 accuracy.update((y_pred, y))
 
+            # This metrics will be epoch metrics because they are called outside
+            # dataloader loop
+            # Here we logging metric without resetting it
             loop.metrics.log("valid/precision", precision.compute().mean())
             loop.metrics.log("valid/recall", recall.compute().mean())
+
+            # .log() method above accepts values (tensors, floats, np.array's)
+            # .consume() accepts Metric object. It resets it after logging
             loop.metrics.consume("valid/f1", f1)
             loop.metrics.consume("valid/accuracy", accuracy)
 
@@ -96,9 +117,12 @@ def run(loop: Loop):
 loop = Loop(
     unique_logdir("logs/cifar"),
     [
+        # Will save model with highest 'valid/f1' metric
         BestModelSaver("valid/f1", metric_mode="max"),
+        # Nice progressbar
         TqdmProgressCallback(),
-        TensorboardMetricWriterCallback()
+        # Writes metrics to TB
+        TensorboardMetricWriterCallback(),
     ],
 )
 

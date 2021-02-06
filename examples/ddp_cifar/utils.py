@@ -2,7 +2,14 @@ import os
 
 from torchvision import models
 from torchvision import datasets
-from torchvision.transforms import Compose, ToTensor, Normalize, Pad, RandomCrop, RandomHorizontalFlip
+from torchvision.transforms import (
+    Compose,
+    ToTensor,
+    Normalize,
+    Pad,
+    RandomCrop,
+    RandomHorizontalFlip,
+)
 
 train_transform = Compose(
     [
@@ -14,7 +21,12 @@ train_transform = Compose(
     ]
 )
 
-test_transform = Compose([ToTensor(), Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),])
+test_transform = Compose(
+    [
+        ToTensor(),
+        Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    ]
+)
 
 
 def get_train_test_datasets(path):
@@ -24,8 +36,12 @@ def get_train_test_datasets(path):
     else:
         download = True if len(os.listdir(path)) < 1 else False
 
-    train_ds = datasets.CIFAR10(root=path, train=True, download=download, transform=train_transform)
-    test_ds = datasets.CIFAR10(root=path, train=False, download=False, transform=test_transform)
+    train_ds = datasets.CIFAR10(
+        root=path, train=True, download=download, transform=train_transform
+    )
+    test_ds = datasets.CIFAR10(
+        root=path, train=False, download=False, transform=test_transform
+    )
 
     return train_ds, test_ds
 
