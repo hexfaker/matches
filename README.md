@@ -28,6 +28,12 @@ Take control back!
 * Comprehensive internals. Library code is clean and easy to understand, which
   prevents bugs and simplifies debugging if bug still happened
   
+#### Planned
+* DeepSpeed support
+* Logging abstraction to seamlessly work with multiple sinks (eg tensorboard and WandB)
+* Training stages/phases
+* Rich configuration API with CLI support
+* Train resuming
 
 ## Installation
 ```shell
