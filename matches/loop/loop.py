@@ -16,6 +16,7 @@ from typing import (
     TypeVar,
     Union,
 )
+from warnings import warn
 
 import ignite.distributed as idist
 import torch
@@ -72,7 +73,13 @@ class StateManager:
 
     def write_state(self, file: Union[str, PathLike]):
         with Path(file).open("wb") as f:
-            torch.save(self.state_dict(), f)
+            state_dict = self.state_dict()
+            if len(state_dict) == 0:
+                warn(
+                    "state_dict is empty. Did you forget to attach "
+                    "model/optimizer/scheduler etc?"
+                )
+            torch.save(state_dict, f)
 
     def read_state(self, file: Union[str, PathLike]):
         with Path(file).open("rb") as f:
