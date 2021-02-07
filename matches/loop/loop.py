@@ -235,9 +235,10 @@ class Loop:
         try:
             self._emit_event(enter_event_name, **kwargs)
             yield
+            self._emit_event(exit_event_name, **kwargs)
         except GeneratorExit:
-            pass
-        self._emit_event(exit_event_name, **kwargs)
+            self._emit_event(exit_event_name, **kwargs)
+            raise
 
     def backward(self, loss: torch.Tensor, **backward_kwargs):
         """Simple optional wrapper for backward call.
