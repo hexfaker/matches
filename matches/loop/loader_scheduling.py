@@ -51,6 +51,7 @@ class DataloaderSchedulerWrapper(Generic[T_co]):
 
         self._internal_loader_full_passes = 0
         self._internal_iteration = 0
+        self._init_done = True
 
     def _internal_loader_iter(self):
         for i, batch in islice(enumerate(self.dataloader), self.truncated_len):
@@ -74,14 +75,12 @@ class DataloaderSchedulerWrapper(Generic[T_co]):
     def __len__(self):
         return self.single_pass_len
 
-    @property
-    def internal_loader_passes(self) -> float:
-        return self._internal_loader_full_passes + self._internal_iteration / len(self.dataloader)
+    def __getattr__(self, item):
 
-    @property
-    def dataset(self):
-        return self.dataloader.dataset
+        return getattr(self.dataloader, item)
 
-    @property
-    def sampler(self):
-        return self.dataloader.sampler
+    def __setattr__(self, key, value):
+        if "_init_done" in self.__dict__ and not key in self.__dict__:
+            setattr(self.dataloader, key, value)
+        else:
+            object.__setattr__(self, key, value)
