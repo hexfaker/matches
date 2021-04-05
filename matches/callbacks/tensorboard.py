@@ -1,6 +1,7 @@
 from typing import Optional
+from warnings import warn
 
-from ignite.distributed import one_rank_only
+from ignite.distributed import get_rank, one_rank_only
 from tensorboardX import SummaryWriter
 
 from . import Callback
@@ -11,7 +12,7 @@ class TensorboardMetricWriterCallback(Callback):
     def __init__(self, logdir_suffix: str = ""):
         self.logdir_suffix = logdir_suffix
 
-        self.sw: Optional[SummaryWriter] = None
+        self._sw: Optional[SummaryWriter] = None
 
     @one_rank_only()
     def on_iteration_end(self, loop: "Loop", batch_no: int):
@@ -22,11 +23,22 @@ class TensorboardMetricWriterCallback(Callback):
         self._consume_new_entries(loop)
         self.sw.flush()
 
+    @one_rank_only
+    def on_dataloader_end(self, loop: "Loop", dataloader: DataLoader):
+        self._consume_new_entries(loop)
+        self.sw.flush()
+
     @one_rank_only()
     def on_train_end(self, loop: "Loop"):
         if self.sw:
             self.sw.close()
             self.sw = None
+
+    def get_sw(self, loop) -> SummaryWriter:
+        if get_rank() != 0:
+            warn("SummaryWriter was requested used in process with non-zero rank")
+        self._init_sw(loop)
+        return self.sw
 
     def _init_sw(self, loop: Loop):
         if self.sw is None:

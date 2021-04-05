@@ -54,7 +54,7 @@ def _wrap_for_dev(dataloader):
     # So we want minimal test of dataloader mutliprocessing,
     # But we want it fast
     dataloader.num_workers = 1
-    return DataloaderSchedulerWrapper(dataloader, single_pass_length=3)
+    return DataloaderSchedulerWrapper(dataloader, truncated_length=3)
 
 
 class StateManager:
@@ -284,7 +284,7 @@ class Loop:
         self,
         optimizer: Optimizer,
         closure: Optional[Callable[[], float]] = None,
-        zero_grad: bool = True,
+        zero_grad: Any[bool, str] = True,
     ):
         """Optional shortcut wrapper for optimizer step.
 
@@ -305,7 +305,7 @@ class Loop:
         self._emit_event("on_before_optimizer_step", optimizer=optimizer)
         optimizer.step(closure)
         if zero_grad:
-            optimizer.zero_grad()
+            optimizer.zero_grad(zero_grad=="set_to_none")
         self._emit_event("on_before_optimizer_step", optimizer=optimizer)
         self.iterations.global_steps.inc()
 
