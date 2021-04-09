@@ -284,7 +284,7 @@ class Loop:
         self,
         optimizer: Optimizer,
         closure: Optional[Callable[[], float]] = None,
-        zero_grad: Any[bool, str] = True,
+        zero_grad: Union[bool, str] = True,
     ):
         """Optional shortcut wrapper for optimizer step.
 

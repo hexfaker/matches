@@ -3,6 +3,7 @@ from warnings import warn
 
 from ignite.distributed import get_rank, one_rank_only
 from tensorboardX import SummaryWriter
+from torch.utils.data import DataLoader
 
 from . import Callback
 from ..loop import Loop
@@ -12,7 +13,7 @@ class TensorboardMetricWriterCallback(Callback):
     def __init__(self, logdir_suffix: str = ""):
         self.logdir_suffix = logdir_suffix
 
-        self._sw: Optional[SummaryWriter] = None
+        self.sw: Optional[SummaryWriter] = None
 
     @one_rank_only()
     def on_iteration_end(self, loop: "Loop", batch_no: int):
@@ -23,7 +24,7 @@ class TensorboardMetricWriterCallback(Callback):
         self._consume_new_entries(loop)
         self.sw.flush()
 
-    @one_rank_only
+    @one_rank_only()
     def on_dataloader_end(self, loop: "Loop", dataloader: DataLoader):
         self._consume_new_entries(loop)
         self.sw.flush()
