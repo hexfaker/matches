@@ -29,9 +29,12 @@ class DDPAccelerator(Accelerator):
 
     def execute(self, func: Callable, *args, **kwargs):
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, self.devices))
-        with Parallel(
-            backend="nccl",
-            nproc_per_node=len(self.devices),
-            master_port=self._master_port(),
-        ) as p:
-            p.run(self._worker_fn, func, *args, **kwargs)
+        if len(self.devices) > 1:
+            with Parallel(
+                backend="nccl",
+                nproc_per_node=len(self.devices),
+                master_port=self._master_port(),
+            ) as p:
+                p.run(self._worker_fn, func, *args, **kwargs)
+        else:
+            func(*args, **kwargs)
