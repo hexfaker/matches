@@ -37,4 +37,5 @@ class DDPAccelerator(Accelerator):
             ) as p:
                 p.run(self._worker_fn, func, *args, **kwargs)
         else:
+            torch.cuda.set_device(self.devices[0])
             func(*args, **kwargs)

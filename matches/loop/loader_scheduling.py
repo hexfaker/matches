@@ -18,11 +18,11 @@ class DataloaderSchedulerWrapper(Generic[T_co]):
     """
 
     def __init__(
-        self,
-        dataloader: DataLoader[T_co],
-        *,
-        single_pass_length: Union[int, float] = 1.0,
-        truncated_length: Union[int, float] = 1.0,
+            self,
+            dataloader: DataLoader[T_co],
+            *,
+            single_pass_length: Union[int, float] = 1.0,
+            truncated_length: Union[int, float] = 1.0,
     ):
         """
 
@@ -80,7 +80,7 @@ class DataloaderSchedulerWrapper(Generic[T_co]):
         return getattr(self.dataloader, item)
 
     def __setattr__(self, key, value):
-        if "_init_done" in self.__dict__ and not key in self.__dict__:
+        if "_init_done" in self.__dict__ and key not in self.__dict__:
             setattr(self.dataloader, key, value)
         else:
             object.__setattr__(self, key, value)
