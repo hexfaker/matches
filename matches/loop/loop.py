@@ -28,7 +28,7 @@ from torch.utils.data import DataLoader
 
 from matches.accelerators import Accelerator
 from matches.loop.iteration import IterationCounter
-from matches.loop.loader_scheduling import DataloaderSchedulerWrapper
+from matches.loop.loader_scheduling import DataloaderOverrider, DataloaderSchedulerWrapper
 from matches.loop.metric_manager import MetricManager
 
 if TYPE_CHECKING:
@@ -46,15 +46,6 @@ class StateSource(Protocol):
 
     def load_state_dict(self, state_dict):
         pass
-
-
-@lru_cache
-def _wrap_for_dev(dataloader):
-    # Every extra worker slows down start
-    # So we want minimal test of dataloader mutliprocessing,
-    # But we want it fast
-    dataloader.num_workers = 1
-    return DataloaderSchedulerWrapper(dataloader, truncated_length=3)
 
 
 class StateManager:
@@ -91,9 +82,8 @@ class Loop:
         self,
         logdir: PathLike,
         callbacks: List["Callback"],
-        dev: bool = False,
+        loader_override: str = "disabled",
     ):
-        self.dev = dev
         self.callbacks = callbacks
         self.state_manager = StateManager()
         self.metrics = MetricManager(self)
@@ -108,6 +98,7 @@ class Loop:
         self._mode: Optional[str] = None
 
         self._modules: List[nn.Module] = []
+        self._loader_override = DataloaderOverrider(loader_override)
 
     def _emit_event(self, event: str, **event_kwargs):
         for c in self.callbacks:
@@ -164,7 +155,7 @@ class Loop:
         Yields:
               current epoch number
         """
-        if self.dev:
+        if self._loader_override.mode == "short":
             epochs = 2
 
         while self.iterations.current_epoch < epochs:
@@ -208,8 +199,7 @@ class Loop:
         """
         self._mode = mode
 
-        if self.dev:
-            dataloader = _wrap_for_dev(dataloader)
+        dataloader = self._loader_override(dataloader, mode)
 
         with self._wrap_in_events(
             "on_dataloader_start", "on_dataloader_end", dataloader=dataloader
@@ -220,7 +210,7 @@ class Loop:
                     "on_iteration_start", "on_iteration_end", batch_no=batch_no
                 ):
                     if move_to_default_device:
-                        batch = convert_tensor(batch, idist.device())
+                        batch = convert_tensor(batch, idist.device(), non_blocking=True)
                     yield batch
                     if self._mode == "train":
                         self.iterations.current_batch.inc()
@@ -305,7 +295,7 @@ class Loop:
         self._emit_event("on_before_optimizer_step", optimizer=optimizer)
         optimizer.step(closure)
         if zero_grad:
-            optimizer.zero_grad(zero_grad=="set_to_none")
+            optimizer.zero_grad(zero_grad == "set_to_none")
         self._emit_event("on_before_optimizer_step", optimizer=optimizer)
         self.iterations.global_steps.inc()
 
