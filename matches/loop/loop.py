@@ -1,7 +1,7 @@
 import logging
+import os
 import typing
 from contextlib import contextmanager
-from functools import lru_cache
 from os import PathLike
 from pathlib import Path
 from typing import (
@@ -28,7 +28,9 @@ from torch.utils.data import DataLoader
 
 from matches.accelerators import Accelerator
 from matches.loop.iteration import IterationCounter
-from matches.loop.loader_scheduling import DataloaderOverrider, DataloaderSchedulerWrapper
+from matches.loop.loader_scheduling import (
+    DataloaderOverrider,
+)
 from matches.loop.metric_manager import MetricManager
 
 if TYPE_CHECKING:
@@ -46,6 +48,9 @@ class StateSource(Protocol):
 
     def load_state_dict(self, state_dict):
         pass
+
+
+NON_BLOCKING_COPY = bool(os.environ.get("NBC", "True"))
 
 
 class StateManager:
@@ -199,7 +204,7 @@ class Loop:
         """
         self._mode = mode
 
-        #dataloader = self._loader_override(dataloader, mode)
+        # dataloader = self._loader_override(dataloader, mode)
 
         with self._wrap_in_events(
             "on_dataloader_start", "on_dataloader_end", dataloader=dataloader
@@ -210,7 +215,9 @@ class Loop:
                     "on_iteration_start", "on_iteration_end", batch_no=batch_no
                 ):
                     if move_to_default_device:
-                        batch = convert_tensor(batch, idist.device(), non_blocking=True)
+                        batch = convert_tensor(
+                            batch, idist.device(), non_blocking=NON_BLOCKING_COPY
+                        )
                     yield batch
                     if self._mode == "train":
                         self.iterations.current_batch.inc()
