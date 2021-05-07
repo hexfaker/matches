@@ -199,7 +199,7 @@ class Loop:
         """
         self._mode = mode
 
-        dataloader = self._loader_override(dataloader, mode)
+        #dataloader = self._loader_override(dataloader, mode)
 
         with self._wrap_in_events(
             "on_dataloader_start", "on_dataloader_end", dataloader=dataloader

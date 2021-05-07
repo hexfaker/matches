@@ -77,7 +77,6 @@ class DataloaderSchedulerWrapper(Generic[T_co]):
         return self.single_pass_len
 
     def __getattr__(self, item):
-
         return getattr(self.dataloader, item)
 
     def __setattr__(self, key, value):
@@ -99,7 +98,7 @@ class CacheSingleBatchDL():
         return 1
 
     def __getattr__(self, item):
-        return getattr(self.dataloader, item)
+        return getattr(self.loader, item)
 
     def __setattr__(self, key, value):
         if "_init_done" in self.__dict__ and key not in self.__dict__:
