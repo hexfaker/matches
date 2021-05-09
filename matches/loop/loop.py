@@ -79,7 +79,7 @@ class StateManager:
 
     def read_state(self, file: Union[str, PathLike]):
         with Path(file).open("rb") as f:
-            self.load_state_dict(torch.load(f))
+            self.load_state_dict(torch.load(f, map_location="cpu"))
 
 
 class Loop:
