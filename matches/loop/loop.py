@@ -12,7 +12,7 @@ from typing import (
     List,
     Optional,
     Protocol,
-    TYPE_CHECKING,
+    Sequence, TYPE_CHECKING,
     TypeVar,
     Union,
 )
@@ -63,9 +63,11 @@ class StateManager:
     def state_dict(self):
         return {key: value.state_dict() for key, value in self._state_sources.items()}
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict, skip_keys: Optional[Sequence[str]] = None):
+        skip_keys = skip_keys if skip_keys else []
         for k, ss in self._state_sources.items():
-            ss.load_state_dict(state_dict[k])
+            if k not in skip_keys:
+                ss.load_state_dict(state_dict[k])
 
     def write_state(self, file: Union[str, PathLike]):
         with Path(file).open("wb") as f:
@@ -77,9 +79,9 @@ class StateManager:
                 )
             torch.save(state_dict, f)
 
-    def read_state(self, file: Union[str, PathLike]):
+    def read_state(self, file: Union[str, PathLike], skip_keys: Optional[Sequence[str]] = None):
         with Path(file).open("rb") as f:
-            self.load_state_dict(torch.load(f, map_location="cpu"))
+            self.load_state_dict(torch.load(f, map_location="cpu"), skip_keys)
 
 
 class Loop:
