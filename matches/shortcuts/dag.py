@@ -1,12 +1,13 @@
 from contextlib import contextmanager
 from inspect import signature
-from types import FunctionType
-from typing import Optional, Sequence
+from typing import Callable, Optional, Sequence, TypeVar
 
 import torch
 
+_T = TypeVar("_T")
 
-def graph_node(method: FunctionType, *, cache_key_args: Optional[Sequence[str]] = None):
+
+def graph_node(method: Callable[..., _T], *, cache_key_args: Optional[Sequence[str]] = None) -> Callable[..., _T]:
     sig = signature(method)
     if "self" not in sig.parameters:
         raise ValueError("graph_node can only be used on ComputationGraph subclass methods")
@@ -37,7 +38,7 @@ class ComputationGraph:
             raise ValueError("Attempt to use cache outside cache_scope()")
         return self._cache.get(key, None)
 
-    def get_or_compute_node(self, method: FunctionType, **kwargs):
+    def get_or_compute_node(self, method: Callable[..., _T], **kwargs):
         key = method.__name__
         value = self.get_cache_entry(key)
 

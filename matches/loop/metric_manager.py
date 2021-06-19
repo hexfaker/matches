@@ -1,12 +1,10 @@
 import logging
 import math
-from numbers import Number
+from dataclasses import dataclass
 from typing import Dict, List, TYPE_CHECKING, Union
 
 import numpy as np
-
 import torch
-from dataclasses import dataclass
 from ignite.metrics import Metric
 
 from .iteration import IterationType

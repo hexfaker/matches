@@ -5,12 +5,15 @@ from contextlib import contextmanager
 import coloredlogs
 from tqdm.auto import tqdm
 
+from .object import AttrProxy
 
-class StreamThroughTqdm:
+
+class StreamThroughTqdm(AttrProxy):
     def __init__(self, real_stream, stdout=sys.stdout, stderr=sys.stderr):
         self._stdout = stdout
         self._stderr = stderr
         self._real_stream = real_stream
+        super().__init__("_real_stream")
 
     @contextmanager
     def _std_streams(self):
