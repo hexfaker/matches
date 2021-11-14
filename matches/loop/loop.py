@@ -12,7 +12,8 @@ from typing import (
     List,
     Optional,
     Protocol,
-    Sequence, TYPE_CHECKING,
+    Sequence,
+    TYPE_CHECKING,
     TypeVar,
     Union,
 )
@@ -32,6 +33,7 @@ from matches.loop.loader_scheduling import (
     DataloaderOverrider,
 )
 from matches.loop.metric_manager import MetricManager
+from matches.shortcuts.module import module_eval, module_train
 
 if TYPE_CHECKING:
     from matches.callbacks.callback import Callback
@@ -79,7 +81,9 @@ class StateManager:
                 )
             torch.save(state_dict, f)
 
-    def read_state(self, file: Union[str, PathLike], skip_keys: Optional[Sequence[str]] = None):
+    def read_state(
+        self, file: Union[str, PathLike], skip_keys: Optional[Sequence[str]] = None
+    ):
         with Path(file).open("rb") as f:
             self.load_state_dict(torch.load(f, map_location="cpu"), skip_keys)
 
@@ -110,10 +114,6 @@ class Loop:
     def _emit_event(self, event: str, **event_kwargs):
         for c in self.callbacks:
             getattr(c, event)(self, **event_kwargs)
-
-    def _set_training(self, training):
-        for m in self._modules:
-            m.train(training)
 
     def attach(
         self,
@@ -206,6 +206,10 @@ class Loop:
         """
         self._mode = mode
 
+        assert (
+            mode != "train" or self._in_epoch
+        ), "Dataloader can be run in train mode only inside epoch loop"
+
         # dataloader = self._loader_override(dataloader, mode)
 
         with self._wrap_in_events(
@@ -263,21 +267,21 @@ class Loop:
         Args:
             mode: train/valid
         """
-        assert (
-            mode != "train" or self._in_epoch
-        ), "Dataloader can be run in train mode only inside epoch loop"
         old_mode = self._mode
+        is_eval = mode == "valid"
         try:
             self._mode = mode
-
-            with torch.set_grad_enabled(mode == "train"):
-                self._set_training(mode == "train")
+            if is_eval:
+                with torch.set_grad_enabled(False), module_train(
+                    *self._modules, train=False
+                ):
+                    yield
+            else:
                 yield
         except GeneratorExit:
             pass
 
         self._mode = old_mode
-        self._set_training(old_mode == "train")
 
     def optimizer_step(
         self,
