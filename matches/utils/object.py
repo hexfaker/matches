@@ -6,7 +6,7 @@ class AttrProxy:
         self._is_init_done = True
 
     def __getattr__(self, item):
-        return getattr(getattr(self, self._attr_name), item)
+        return object.__geattr__(object.__geattr__(self, self._attr_name), item)
 
     def __setattr__(self, key, value):
         if "_is_init_done" in self.__dict__ and key not in self.__dict__:
