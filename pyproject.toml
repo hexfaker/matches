@@ -6,8 +6,8 @@ authors = ["Vsevolod Poletaev <poletaev.va@gmail.com>"]
 license = "GPL-3.0-only"
 
 [tool.poetry.dependencies]
-python = "^3.6.2"
-torch = "^1.6.0"
+python = "^3.7.0"
+torch = ">=1.6.0"
 pytorch-ignite = "^0.4.2"
 tqdm = "^4.56.0"
 coloredlogs = "^15.0"

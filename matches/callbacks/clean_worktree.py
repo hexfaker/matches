@@ -46,8 +46,6 @@ def _ensure_clean_worktree() -> str:
     if not diff_is_empty:
         raise Exception("There are some uncommited changes! Aborting...")
 
-    assert r.active_branch.name.startswith("exp"), "Branch name must start with 'exp'"
-
     return r.head.reference.commit.hexsha
 
 
@@ -58,7 +56,6 @@ def _write_git_ref(logdir, ref):
 
 
 class EnsureWorkdirCleanOrDevMode(Callback):
-
     @one_rank_only()
     def on_train_start(self, loop: "Loop"):
         if Repo is None:
