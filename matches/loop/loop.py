@@ -309,7 +309,7 @@ class Loop:
         optimizer.step(closure)
         if zero_grad:
             optimizer.zero_grad(zero_grad == "set_to_none")
-        self._emit_event("on_before_optimizer_step", optimizer=optimizer)
+        self._emit_event("on_after_optimizer_step", optimizer=optimizer)
         self.iterations.global_steps.inc()
 
     def run(self, training_procedure: typing.Callable, *args, **kwargs):

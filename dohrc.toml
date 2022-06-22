@@ -1,0 +1,14 @@
+workdir_from_host = true
+image_build_command = "docker build . -t {image_name}"
+use_local_config = true
+sh_cmd = "bash"
+
+[environment]
+HOME = "$HOME"
+PYTHONPATH="$PWD"
+
+[fake_home]
+root = ".doh/home"
+real_paths = []
+
+[hosts.all]
