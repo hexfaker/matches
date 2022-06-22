@@ -1,8 +1,8 @@
 import logging
+import os
 import subprocess
 from abc import ABC, abstractmethod
 from typing import Callable, List, Union
-import os
 
 import torch.cuda
 from ignite.distributed import Parallel

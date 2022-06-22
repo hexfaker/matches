@@ -4,36 +4,22 @@ import typing
 from contextlib import contextmanager
 from os import PathLike
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Protocol,
-    Sequence,
-    TYPE_CHECKING,
-    TypeVar,
-    Union,
-)
+from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable, List,
+                    Optional, Protocol, Sequence, TypeVar, Union)
 from warnings import warn
 
 import ignite.distributed as idist
 import torch
 from ignite.metrics import Metric
 from ignite.utils import convert_tensor
+from matches.accelerators import Accelerator
+from matches.loop.iteration import IterationCounter
+from matches.loop.loader_scheduling import DataloaderOverrider
+from matches.loop.metric_manager import MetricManager
+from matches.shortcuts.module import module_eval, module_train
 from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
-
-from matches.accelerators import Accelerator
-from matches.loop.iteration import IterationCounter
-from matches.loop.loader_scheduling import (
-    DataloaderOverrider,
-)
-from matches.loop.metric_manager import MetricManager
-from matches.shortcuts.module import module_eval, module_train
 
 if TYPE_CHECKING:
     from matches.callbacks.callback import Callback
